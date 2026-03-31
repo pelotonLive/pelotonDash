@@ -144,6 +144,28 @@
     th.sort-asc::after  { content:' ▲'; color:#c8f23a; font-size:9px; }
     th.sort-desc::after { content:' ▼'; color:#c8f23a; font-size:9px; }
 
+    /* ── Recent races box ── */
+    #recent-races-outer { max-width:1400px; margin:0 auto; padding:6px clamp(16px,4vw,48px) 0; }
+    #recent-races-box { border:1px solid #1e2028; border-radius:6px; background:#0f1117;
+      font-family:'Space Mono',monospace; overflow:hidden; }
+    #recent-races-box summary { list-style:none; cursor:pointer; padding:8px 14px;
+      font-size:11px; color:#555; letter-spacing:.08em; text-transform:uppercase;
+      display:flex; align-items:center; gap:8px; user-select:none; }
+    #recent-races-box summary::-webkit-details-marker { display:none; }
+    #recent-races-box summary::before { content:'▶'; font-size:8px; color:#444;
+      transition:transform .15s; display:inline-block; }
+    #recent-races-box[open] summary::before { transform:rotate(90deg); }
+    #recent-races-box summary:hover { color:#888; }
+    #recent-races-list { padding:0 14px 10px;
+      display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:4px 16px; }
+    .rc-row { display:flex; align-items:baseline; gap:8px; padding:3px 0;
+      border-bottom:1px solid #1a1c24; font-size:11px; }
+    .rc-row:last-child { border-bottom:none; }
+    .rc-cls { font-size:9px; font-weight:700; letter-spacing:.06em; white-space:nowrap;
+      padding:1px 5px; border-radius:3px; background:#1e2028; }
+    .rc-name { color:#888; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .rc-date { color:#444; font-size:10px; white-space:nowrap; }
+
     /* ── Loading / error ── */
     .spinner { width: 28px; height: 28px; border: 2px solid #2a2d3a; border-top-color: #c8f23a;
       border-radius: 50%; animation: spin .8s linear infinite; margin: 60px auto; }
@@ -183,6 +205,13 @@
     <button class="tab"        onclick="showTab('riders',this)">Rider Standings</button>
     <button class="tab"        onclick="showTab('races',this)">Races &amp; Stages</button>
   </div>
+</div>
+
+<div id="recent-races-outer">
+  <details id="recent-races-box">
+    <summary>Recent races</summary>
+    <div id="recent-races-list"></div>
+  </details>
 </div>
 
 <main id="main-content">
@@ -1442,6 +1471,25 @@ function initYear() {
   renderRaceProfile();
   renderRaceVert();
   renderRaceDist();
+
+  // ── Recent races box — show only races from the most recent date ──
+  const recentEl = document.getElementById('recent-races-list');
+  if (recentEl) {
+    const allRecent = (YD.recent_races||[]);
+    const maxDate = allRecent.reduce((mx, r) => (r.date_start||'') > mx ? r.date_start : mx, '');
+    const races = allRecent.filter(r => (r.date_start||'').slice(0,10) === maxDate.slice(0,10));
+    recentEl.innerHTML = races.map(r => {
+      const ds = (r.date_start||'').slice(0,10);
+      const de = (r.date_end||'').slice(0,10);
+      const dateStr = de && de !== ds ? `${ds} – ${de.slice(5)}` : ds;
+      const clsCol = raceCls(r.race_class);
+      return `<div class="rc-row">
+        <span class="rc-cls" style="color:${clsCol};border-color:${clsCol}22">${r.race_class}</span>
+        <span class="rc-name">${r.name}</span>
+        <span class="rc-date">${dateStr}</span>
+      </div>`;
+    }).join('');
+  }
 }
 
 // ─── RACE / STAGE CHARTS ──────────────────────────────────────────────────────
