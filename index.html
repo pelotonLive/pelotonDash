@@ -1,0 +1,1658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UCI Dashboard — Pro Cycling Points</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body { background: #0c0d12; color: #f5f0e8; font-family: 'Space Mono', monospace; font-size: 13px; line-height: 1.5; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0c0d12; }
+    ::-webkit-scrollbar-thumb { background: #2a2d3a; border-radius: 3px; }
+
+    @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+    @keyframes spin   { to { transform: rotate(360deg); } }
+
+    /* ── Layout ── */
+    header { border-bottom: 1px solid #1e2028; padding: 0 clamp(16px,4vw,48px); }
+    .header-inner { max-width: 1400px; margin: 0 auto; padding: 18px 0;
+      display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+    .tab-bar { border-bottom: 1px solid #1e2028; padding: 0 clamp(16px,4vw,48px);
+      background: #0c0d12; position: sticky; top: 0; z-index: 10; }
+    .tab-inner { max-width: 1400px; margin: 0 auto; display: flex; }
+    main { max-width: 1400px; margin: 0 auto; padding: 24px clamp(16px,4vw,48px) 80px; }
+    footer { border-top: 1px solid #1e2028; padding: 20px clamp(16px,4vw,48px); color: #444; font-size: 11px; }
+    .footer-inner { max-width: 1400px; margin: 0 auto;
+      display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+
+    /* ── Typography ── */
+    .logo { font-family: 'Playfair Display', serif; font-weight: 900;
+      font-size: clamp(20px,3vw,26px); color: #f5f0e8; letter-spacing: -0.02em; }
+    .logo span { color: #c8f23a; }
+    .logo-sub { color: #444; font-size: 10px; margin-top: 2px; }
+
+    /* ── Tabs ── */
+    .tab { background: none; border: none; border-bottom: 2px solid transparent;
+      color: #555; font-family: 'Space Mono', monospace; font-size: 11px; font-weight: 700;
+      letter-spacing: 0.1em; text-transform: uppercase; padding: 14px 20px;
+      cursor: pointer; transition: color .15s, border-color .15s; }
+    .tab:hover { color: #888; }
+    .tab.active { color: #c8f23a; border-bottom-color: #c8f23a; }
+
+    /* ── Section header ── */
+    .section-header { display: flex; align-items: center; gap: 12px; margin: 28px 0 16px; }
+    .section-title { font-size: 11px; font-weight: 700; letter-spacing: 0.14em;
+      color: #888; text-transform: uppercase; white-space: nowrap; }
+    .section-line { flex: 1; height: 1px; background: #1e2028; }
+
+    /* ── KPI cards ── */
+    .kpi-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 20px; }
+    .kpi-card { background: #16181f; border: 1px solid #2a2d3a; border-radius: 10px; padding: 16px 20px; }
+    .kpi-label { color: #555; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; margin-bottom: 6px; }
+    .kpi-value { font-family: 'Playfair Display', serif; font-size: 28px; color: #f5f0e8; line-height: 1; }
+    .kpi-sub   { color: #444; font-size: 10px; margin-top: 4px; }
+
+    /* ── Collapsible card ── */
+    .card { background: #16181f; border: 1px solid #2a2d3a; border-radius: 12px;
+      overflow: hidden; margin-bottom: 16px; animation: fadeIn .3s ease both; }
+    .card:hover { border-color: #3a3d50; }
+    .card-toggle { width: 100%; background: none; border: none; padding: 16px 20px;
+      display: flex; justify-content: space-between; align-items: center;
+      cursor: pointer; color: #888; font-family: 'Space Mono', monospace;
+      font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+      transition: background .15s; }
+    .card-toggle:hover { background: #1e2028; }
+    .toggle-icon { color: #444; font-size: 10px; transition: transform .2s; }
+    .card.collapsed .toggle-icon { transform: rotate(-90deg); }
+    .card-body { padding: 4px 20px 20px; border-top: 1px solid #1e2028; }
+    .card.collapsed .card-body { display: none; }
+
+    /* ── Grid layouts ── */
+    .chart-row-2     { display: grid; grid-template-columns: 3fr 2fr; gap: 16px; margin-top: 8px; }
+    .chart-row-equal { display: grid; grid-template-columns: 1fr 1fr;   gap: 16px; }
+
+    /* ── Controls ── */
+    .ctrl-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 0 6px; }
+    .ctrl-label { color: #555; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+
+    .tog-group { display: flex; background: #0c0d12; border: 1px solid #2a2d3a; border-radius: 6px; overflow: hidden; }
+    .tog-btn { background: none; border: none; padding: 5px 11px;
+      font-family: 'Space Mono', monospace; font-size: 10px; font-weight: 700;
+      letter-spacing: .06em; color: #555; cursor: pointer; transition: background .15s, color .15s;
+      text-transform: uppercase; }
+    .tog-btn.active { background: #2a2d3a; color: #c8f23a; }
+    .tog-btn:hover:not(.active) { color: #888; }
+
+    .rng-wrap { display: flex; align-items: center; gap: 8px; }
+    .rng-wrap input[type=range] { -webkit-appearance: none; width: 100px; height: 4px;
+      background: #2a2d3a; border-radius: 2px; outline: none; cursor: pointer; }
+    .rng-wrap input[type=range]::-webkit-slider-thumb { -webkit-appearance: none;
+      width: 12px; height: 12px; border-radius: 50%; background: #c8f23a; cursor: pointer; }
+    .rng-val { color: #c8f23a; font-size: 11px; min-width: 24px; text-align: right; }
+
+    /* ── Pill multiselect ── */
+    .pill-wrap { display: flex; flex-wrap: wrap; gap: 4px; max-height: 80px; overflow-y: auto; padding: 4px 0; }
+    .pill { background: #1a1c24; border: 1px solid #2a2d3a; border-radius: 4px;
+      color: #555; font-family: 'Space Mono', monospace; font-size: 10px; font-weight: 700;
+      padding: 3px 8px; cursor: pointer; transition: all .15s; white-space: nowrap; }
+    .pill:hover { color: #888; border-color: #3a3d50; }
+    .pill.active { background: #1e2410; border-color: #c8f23a55; color: #c8f23a; }
+    .sel-btns { display: flex; gap: 5px; margin: 6px 0 4px; }
+    .sel-btn { background: none; border: 1px solid #2a2d3a; border-radius: 4px;
+      color: #555; font-family: 'Space Mono', monospace; font-size: 9px; font-weight: 700;
+      padding: 2px 7px; cursor: pointer; letter-spacing: .06em; text-transform: uppercase;
+      transition: color .15s, border-color .15s; }
+    .sel-btn:hover { color: #c8f23a; border-color: #c8f23a44; }
+
+    /* ── Year select ── */
+    .yr-sel { background: #16181f; border: 1px solid #2a2d3a; border-radius: 6px;
+      color: #f5f0e8; font-family: 'Space Mono', monospace; font-size: 12px;
+      padding: 6px 12px; outline: none; cursor: pointer; }
+    .yr-sel option { background: #16181f; }
+
+    /* ── Table ── */
+    .tbl-scroll { max-height: 520px; overflow-y: auto; }
+    table.dt { width: 100%; border-collapse: collapse; font-size: 12px; }
+    table.dt th { padding: 8px 10px; text-align: left; color: #555; font-size: 10px;
+      letter-spacing: .1em; font-weight: 700; text-transform: uppercase;
+      background: #0f1117; border-bottom: 1px solid #2a2d3a; white-space: nowrap;
+      position: sticky; top: 0; z-index: 1; }
+    table.dt td { padding: 7px 10px; border-bottom: 1px solid #1e2028; color: #d0d0e0; }
+    table.dt tr:hover td { background: #1a1c24; }
+    table.dt tr:last-child td { border-bottom: none; }
+    .c-rank { color: #555; font-size: 11px; }
+    .c-pts  { color: #c8f23a; font-weight: 700; }
+    .c-wt   { color: #185FA5; }
+    .c-prt  { color: #0F6E56; }
+    .c-ct   { color: #854F0B; }
+    .c-oth  { color: #666; }
+
+    /* ── Pyramid ── */
+    .pyr-row { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 4px; margin-top: 10px; }
+    .pyr-col { flex: 1; min-width: 160px; }
+    .pyr-lbl { color: #888; font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+      text-align: center; margin-bottom: 4px; }
+
+    /* ── Sortable table ── */
+    th.sortable { cursor:pointer; user-select:none; }
+    th.sortable:hover { color:#c8f23a; }
+    th.sort-asc::after  { content:' ▲'; color:#c8f23a; font-size:9px; }
+    th.sort-desc::after { content:' ▼'; color:#c8f23a; font-size:9px; }
+
+    /* ── Loading / error ── */
+    .spinner { width: 28px; height: 28px; border: 2px solid #2a2d3a; border-top-color: #c8f23a;
+      border-radius: 50%; animation: spin .8s linear infinite; margin: 60px auto; }
+    .err-box { text-align: center; padding: 60px 20px; color: #555; }
+    .err-box h3 { font-family: 'Playfair Display', serif; font-size: 22px; color: #888; margin-bottom: 12px; }
+    .err-box code { color: #c8f23a; background: #1e2028; padding: 2px 6px; border-radius: 3px; }
+
+    @media (max-width: 900px) {
+      .kpi-row        { grid-template-columns: repeat(2,1fr); }
+      .chart-row-2    { grid-template-columns: 1fr; }
+      .chart-row-equal{ grid-template-columns: 1fr; }
+    }
+    @media (max-width: 500px) {
+      .kpi-row { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div>
+      <div class="logo">UCI<span>Dashboard</span></div>
+      <div class="logo-sub">/ pro cycling points · procyclingstats.com</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <span class="ctrl-label">Season</span>
+      <select class="yr-sel" id="yr-sel" onchange="onYearChange()"></select>
+      <button id="btn-clr" class="tog-btn active" onclick="toggleColours(this)" title="Toggle team name colour schemes">Team colours</button>
+    </div>
+  </div>
+</header>
+
+<div class="tab-bar">
+  <div class="tab-inner">
+    <button class="tab active" onclick="showTab('teams',this)">Team Standings</button>
+    <button class="tab"        onclick="showTab('riders',this)">Rider Standings</button>
+    <button class="tab"        onclick="showTab('races',this)">Races &amp; Stages</button>
+  </div>
+</div>
+
+<main id="main-content">
+  <div class="spinner"></div>
+</main>
+
+<footer>
+  <div class="footer-inner">
+    <span>UCI Dashboard · Data via
+      <a href="https://www.procyclingstats.com" target="_blank"
+         style="color:#555;text-decoration:none">ProCyclingStats ↗</a>
+    </span>
+    <span style="color:#333">Run <code style="color:#444">python export_data.py</code> to refresh</span>
+  </div>
+</footer>
+
+<!-- ─────────────────────────────────────────────────────────────────────────
+     TEMPLATES (hidden, cloned into #main-content after data loads)
+──────────────────────────────────────────────────────────────────────────── -->
+<template id="tpl-teams">
+  <div id="tab-teams">
+    <div id="team-kpis" class="kpi-row"></div>
+    <div class="ctrl-row" style="margin-bottom:4px">
+      <span class="ctrl-label">Tier</span>
+      <div class="tog-group" id="tg-tier">
+        <button class="tog-btn active" data-v="both" onclick="setTierFilter('both',this)">WT + PRT</button>
+        <button class="tog-btn"        data-v="WT"   onclick="setTierFilter('WT',this)">WT only</button>
+        <button class="tog-btn"        data-v="PRT"  onclick="setTierFilter('PRT',this)">PRT only</button>
+      </div>
+    </div>
+
+    <div class="card" id="c-team-standings">
+      <button class="card-toggle" onclick="toggleCard('c-team-standings')">
+        Standings <span class="toggle-icon">▼</span>
+      </button>
+      <div class="card-body">
+        <div class="ctrl-row">
+          <span class="ctrl-label">Metric</span>
+          <div class="tog-group" id="tg-team-metric">
+            <button class="tog-btn active" data-v="total_points"  onclick="tog('tg-team-metric',this,renderTeamBar)">Total pts</button>
+            <button class="tog-btn"        data-v="pts_per_race"  onclick="tog('tg-team-metric',this,renderTeamBar)">Pts / race</button>
+            <button class="tog-btn"        data-v="form_30d"      onclick="tog('tg-team-metric',this,renderTeamBar)">Form 30d</button>
+          </div>
+          <span class="ctrl-label" style="margin-left:10px">Top</span>
+          <div class="rng-wrap">
+            <input type="range" id="rng-team-n" min="5" max="40" value="20"
+              oninput="document.getElementById('rv-team-n').textContent=this.value;renderTeamBar()">
+            <span class="rng-val" id="rv-team-n">20</span>
+          </div>
+        </div>
+        <div class="chart-row-2">
+          <div id="ch-team-bar" style="min-height:500px"></div>
+          <div class="tbl-scroll"><table class="dt" id="tbl-teams"></table></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="c-team-detail">
+      <button class="card-toggle" onclick="toggleCard('c-team-detail')">
+        Team detail <span class="toggle-icon">▼</span>
+      </button>
+      <div class="card-body">
+        <div class="ctrl-row">
+          <span class="ctrl-label">Team</span>
+          <select id="sel-team-detail" class="yr-sel" onchange="renderTeamDetail()" style="max-width:320px"></select>
+        </div>
+        <div class="chart-row-equal" style="margin-top:12px">
+          <div id="ch-team-detail-riders" style="min-height:280px"></div>
+          <div id="ch-team-detail-cls"    style="min-height:280px"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="c-team-tl">
+      <button class="card-toggle" onclick="toggleCard('c-team-tl')">
+        Season timeline <span class="toggle-icon">▼</span>
+      </button>
+      <div class="card-body">
+        <div class="ctrl-row">
+          <span class="ctrl-label">View</span>
+          <div class="tog-group" id="tg-team-view">
+            <button class="tog-btn active" data-v="cumulative" onclick="tog('tg-team-view',this,renderTeamTimeline)">Cumulative</button>
+            <button class="tog-btn"        data-v="period"     onclick="tog('tg-team-view',this,renderTeamTimeline)">Per period</button>
+          </div>
+          <span class="ctrl-label">Period</span>
+          <div class="tog-group" id="tg-team-agg">
+            <button class="tog-btn active" data-v="day"   onclick="tog('tg-team-agg',this,renderTeamTimeline)">Day</button>
+            <button class="tog-btn"        data-v="week"  onclick="tog('tg-team-agg',this,renderTeamTimeline)">Week</button>
+            <button class="tog-btn"        data-v="month" onclick="tog('tg-team-agg',this,renderTeamTimeline)">Month</button>
+          </div>
+          <span class="ctrl-label">Scale</span>
+          <div class="tog-group" id="tg-team-scale">
+            <button class="tog-btn active" data-v="linear" onclick="tog('tg-team-scale',this,renderTeamTimeline)">Linear</button>
+            <button class="tog-btn"        data-v="log"    onclick="tog('tg-team-scale',this,renderTeamTimeline)">Log</button>
+          </div>
+        </div>
+        <span class="ctrl-label">Teams</span>
+        <div class="sel-btns">
+          <button class="sel-btn" onclick="pillAll('team-tl-pills',renderTeamTimeline)">All</button>
+          <button class="sel-btn" onclick="pillNone('team-tl-pills',renderTeamTimeline)">None</button>
+        </div>
+        <div class="pill-wrap" id="team-tl-pills"></div>
+        <div id="ch-team-tl" style="min-height:400px;margin-top:8px"></div>
+      </div>
+    </div>
+
+    <div class="card" id="c-team-pyr">
+      <button class="card-toggle" onclick="toggleCard('c-team-pyr')">
+        Points by race tier <span class="toggle-icon">▼</span>
+      </button>
+      <div class="card-body">
+        <span class="ctrl-label">Compare teams (up to 3)</span>
+        <div class="pill-wrap" id="pyr-pills" style="margin-top:6px"></div>
+        <div class="pyr-row" id="pyr-charts"></div>
+      </div>
+    </div>
+
+    <div class="card" id="c-team-eff">
+      <button class="card-toggle" onclick="toggleCard('c-team-eff')">
+        Points efficiency <span class="toggle-icon">▼</span>
+      </button>
+      <div class="card-body">
+        <div id="ch-team-eff" style="min-height:400px"></div>
+      </div>
+    </div>
+
+    <div class="card" id="c-team-hhi">
+      <button class="card-toggle" onclick="toggleCard('c-team-hhi')">
+        Depth &amp; concentration (HHI) <span class="toggle-icon">▼</span>
+      </button>
+      <div class="card-body">
+        <p style="color:#555;font-size:11px;padding:8px 0 10px">
+          HHI = Σ(rider share²). 1.0 = one rider scores everything · 0 = perfectly spread.
+        </p>
+        <div class="chart-row-equal">
+          <div id="ch-hhi-bar"     style="min-height:400px"></div>
+          <div id="ch-hhi-scatter" style="min-height:400px"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="c-team-radar">
+      <button class="card-toggle" onclick="toggleCard('c-team-radar')">
+        Classification profile (radar) <span class="toggle-icon">▼</span>
+      </button>
+      <div class="card-body">
+        <span class="ctrl-label">Teams</span>
+        <div class="sel-btns">
+          <button class="sel-btn" onclick="pillAll('radar-pills',renderTeamRadar)">All</button>
+          <button class="sel-btn" onclick="pillNone('radar-pills',renderTeamRadar)">None</button>
+        </div>
+        <div class="pill-wrap" id="radar-pills"></div>
+        <div id="ch-team-radar" style="min-height:420px;margin-top:8px"></div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<template id="tpl-riders">
+  <div id="tab-riders" style="display:none">
+    <div id="rider-kpis" class="kpi-row"></div>
+
+    <div class="card" id="c-rider-standings">
+      <button class="card-toggle" onclick="toggleCard('c-rider-standings')">
+        Standings <span class="toggle-icon">▼</span>
+      </button>
+      <div class="card-body">
+        <div class="ctrl-row">
+          <span class="ctrl-label">Metric</span>
+          <div class="tog-group" id="tg-rider-metric">
+            <button class="tog-btn active" data-v="total_points" onclick="tog('tg-rider-metric',this,renderRiderBar)">Total pts</button>
+            <button class="tog-btn"        data-v="pts_per_race" onclick="tog('tg-rider-metric',this,renderRiderBar)">Pts / race</button>
+          </div>
+          <span class="ctrl-label" style="margin-left:10px">Top</span>
+          <div class="rng-wrap">
+            <input type="range" id="rng-rider-n" min="10" max="150" value="25"
+              oninput="document.getElementById('rv-rider-n').textContent=this.value;renderRiderBar()">
+            <span class="rng-val" id="rv-rider-n">25</span>
+          </div>
+        </div>
+        <div class="chart-row-2">
+          <div id="ch-rider-bar" style="min-height:560px"></div>
+          <div class="tbl-scroll"><table class="dt" id="tbl-riders"></table></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="c-rider-detail">
+      <button class="card-toggle" onclick="toggleCard('c-rider-detail')">
+        Rider detail <span class="toggle-icon">▼</span>
+      </button>
+      <div class="card-body">
+        <div class="ctrl-row">
+          <span class="ctrl-label">Rider</span>
+          <input id="inp-rider-detail" list="dl-riders" class="yr-sel"
+            placeholder="Search rider…" oninput="renderRiderDetail()"
+            style="max-width:300px;font-size:12px">
+          <datalist id="dl-riders"></datalist>
+        </div>
+        <div id="rider-detail-info" style="padding-top:4px;font-size:12px;color:#d0d0e0"></div>
+        <div id="ch-rider-detail-cls" style="min-height:200px;margin-top:8px"></div>
+        <div class="tbl-scroll" style="max-height:400px;overflow-y:auto;margin-top:12px">
+          <table class="dt" id="tbl-rider-results"></table>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="c-rider-tl">
+      <button class="card-toggle" onclick="toggleCard('c-rider-tl')">
+        Season timeline <span class="toggle-icon">▼</span>
+      </button>
+      <div class="card-body">
+        <div class="ctrl-row">
+          <span class="ctrl-label">View</span>
+          <div class="tog-group" id="tg-rider-view">
+            <button class="tog-btn active" data-v="cumulative" onclick="tog('tg-rider-view',this,renderRiderTimeline)">Cumulative</button>
+            <button class="tog-btn"        data-v="period"     onclick="tog('tg-rider-view',this,renderRiderTimeline)">Per period</button>
+          </div>
+          <span class="ctrl-label">Period</span>
+          <div class="tog-group" id="tg-rider-agg">
+            <button class="tog-btn active" data-v="day"   onclick="tog('tg-rider-agg',this,renderRiderTimeline)">Day</button>
+            <button class="tog-btn"        data-v="week"  onclick="tog('tg-rider-agg',this,renderRiderTimeline)">Week</button>
+            <button class="tog-btn"        data-v="month" onclick="tog('tg-rider-agg',this,renderRiderTimeline)">Month</button>
+          </div>
+          <span class="ctrl-label">Scale</span>
+          <div class="tog-group" id="tg-rider-scale">
+            <button class="tog-btn active" data-v="linear" onclick="tog('tg-rider-scale',this,renderRiderTimeline)">Linear</button>
+            <button class="tog-btn"        data-v="log"    onclick="tog('tg-rider-scale',this,renderRiderTimeline)">Log</button>
+          </div>
+        </div>
+        <span class="ctrl-label">Riders</span>
+        <div class="sel-btns">
+          <button class="sel-btn" onclick="pillAll('rider-tl-pills',renderRiderTimeline)">All</button>
+          <button class="sel-btn" onclick="pillNone('rider-tl-pills',renderRiderTimeline)">None</button>
+        </div>
+        <div class="pill-wrap" id="rider-tl-pills"></div>
+        <div id="ch-rider-tl" style="min-height:400px;margin-top:8px"></div>
+      </div>
+    </div>
+
+    <div class="card" id="c-rider-cls">
+      <button class="card-toggle" onclick="toggleCard('c-rider-cls')">
+        By classification <span class="toggle-icon">▼</span>
+      </button>
+      <div class="card-body">
+        <div class="ctrl-row">
+          <span class="ctrl-label">Top</span>
+          <div class="rng-wrap">
+            <input type="range" id="rng-cls-n" min="5" max="100" value="20"
+              oninput="document.getElementById('rv-cls-n').textContent=this.value;renderRiderCls()">
+            <span class="rng-val" id="rv-cls-n">20</span>
+          </div>
+          <span class="ctrl-label">riders</span>
+        </div>
+        <div id="ch-rider-cls" style="min-height:520px"></div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<template id="tpl-races">
+  <div id="tab-races" style="display:none">
+    <div id="race-kpis" class="kpi-row"></div>
+
+    <div class="card" id="c-race-sq">
+      <button class="card-toggle" onclick="toggleCard('c-race-sq')">Start quality <span class="toggle-icon">▼</span></button>
+      <div class="card-body">
+        <div class="ctrl-row">
+          <span class="ctrl-label">Top</span>
+          <div class="rng-wrap">
+            <input type="range" id="rng-sq-n" min="5" max="80" value="30"
+              oninput="document.getElementById('rv-sq-n').textContent=this.value;renderRaceStartlist()">
+            <span class="rng-val" id="rv-sq-n">30</span>
+          </div>
+        </div>
+        <div id="ch-race-sq" style="min-height:500px"></div>
+      </div>
+    </div>
+
+    <div class="card" id="c-race-sq-scatter">
+      <button class="card-toggle" onclick="toggleCard('c-race-sq-scatter')">Points vs start quality <span class="toggle-icon">▼</span></button>
+      <div class="card-body">
+        <div id="ch-race-sq-scatter" style="min-height:420px"></div>
+      </div>
+    </div>
+
+    <div class="card" id="c-race-profile">
+      <button class="card-toggle" onclick="toggleCard('c-race-profile')">Profile score <span class="toggle-icon">▼</span></button>
+      <div class="card-body">
+        <div class="ctrl-row">
+          <span class="ctrl-label">Top</span>
+          <div class="rng-wrap">
+            <input type="range" id="rng-prof-n" min="5" max="80" value="30"
+              oninput="document.getElementById('rv-prof-n').textContent=this.value;renderRaceProfile()">
+            <span class="rng-val" id="rv-prof-n">30</span>
+          </div>
+        </div>
+        <div id="ch-race-profile" style="min-height:500px"></div>
+      </div>
+    </div>
+
+    <div class="card" id="c-race-vert">
+      <button class="card-toggle" onclick="toggleCard('c-race-vert')">Vertical meters <span class="toggle-icon">▼</span></button>
+      <div class="card-body">
+        <div class="ctrl-row">
+          <span class="ctrl-label">Top</span>
+          <div class="rng-wrap">
+            <input type="range" id="rng-vert-n" min="5" max="80" value="30"
+              oninput="document.getElementById('rv-vert-n').textContent=this.value;renderRaceVert()">
+            <span class="rng-val" id="rv-vert-n">30</span>
+          </div>
+        </div>
+        <div id="ch-race-vert" style="min-height:500px"></div>
+      </div>
+    </div>
+
+    <div class="card" id="c-race-dist">
+      <button class="card-toggle" onclick="toggleCard('c-race-dist')">Distance <span class="toggle-icon">▼</span></button>
+      <div class="card-body">
+        <div class="ctrl-row">
+          <span class="ctrl-label">Top</span>
+          <div class="rng-wrap">
+            <input type="range" id="rng-dist-n" min="5" max="80" value="30"
+              oninput="document.getElementById('rv-dist-n').textContent=this.value;renderRaceDist()">
+            <span class="rng-val" id="rv-dist-n">30</span>
+          </div>
+        </div>
+        <div id="ch-race-dist" style="min-height:500px"></div>
+      </div>
+    </div>
+
+  </div>
+</template>
+
+<script>
+// ─── Constants ────────────────────────────────────────────────────────────────
+// ─── Race class colours ───────────────────────────────────────────────────────
+const RACE_CLS_COLOUR = {
+  '1.UWT': '#185FA5', '2.UWT': '#1a7bc2',
+  '1.Pro': '#0F6E56', '2.Pro': '#12876b',
+  'WC':    '#c8f23a', 'NC':    '#666',
+  '1.1':   '#854F0B', '2.1':   '#9B5C0D',
+  '1.2':   '#555',    '2.2':   '#555',
+};
+function raceCls(cls) { return RACE_CLS_COLOUR[cls] || '#444'; }
+
+function stageLabel(d) {
+  return d.stage_num != null ? `${d.race} · St.${d.stage_num}` : d.race;
+}
+
+const TIER_COLOURS = { WT:'#185FA5', PRT:'#0F6E56', CT:'#854F0B', other:'#5F5E5A' };
+const TIER_CLASS   = { WT:'c-wt', PRT:'c-prt', CT:'c-ct', other:'c-oth' };
+const CLS_MAP = { result:'one day race', gc:'gc', kom:'gc', points:'gc', youth:'gc' };
+const PYRAMID_ORDER = ['NC','1.1','2.1','1.Pro','2.Pro','1.UWT','2.UWT'];
+const PALETTE = [
+  '#c8f23a','#3a8fd0','#f87171','#4ade80','#fb923c',
+  '#818cf8','#f472b6','#34d399','#fbbf24','#60a5fa',
+  '#a78bfa','#f9a8d4','#6ee7b7','#fde68a','#bfdbfe',
+];
+
+// ─── Team abbreviations ────────────────────────────────────────────────────────
+// Short codes shown after rider names and in space-constrained table cells.
+// Falls back to first significant word if a team is not listed.
+const TEAM_ABBR = {
+  'UAE Team Emirates - XRG':            'UAE',
+  'Team Visma | Lease a Bike':          'VLaB',
+  'Red Bull - BORA - hansgrohe':        'RBH',
+  'Unibet Rose Rockets':                'URR',
+  'XDS Astana Team':                    'XAS',
+  'Pinarello Q36.5 Pro Cycling Team':   'Q36',
+  'Decathlon CMA CGM Team':             'DCC',
+  'Alpecin-Premier Tech':               'APT',
+  'Team Jayco AlUla':                   'JAU',
+  'Bahrain - Victorious':               'BHR',
+  'INEOS Grenadiers':                   'IGD',
+  'Uno-X Mobility':                     'UNO',
+  'Lidl-Trek':                          'LTK',
+  'Soudal Quick-Step':                  'SQS',
+  'EF Education-EasyPost':              'EFE',
+  'Groupama-FDJ':                       'FDJ',
+  'Movistar Team':                      'MOV',
+  'Cofidis':                            'COF',
+  'Intermarché-Wanty':                  'IWG',
+  'Team dsm-firmenich PostNL':          'DSM',
+  'Israel-Premier Tech':                'IPT',
+  'Arkéa - B&B Hotels':                 'ARK',
+  'TotalEnergies':                      'TEN',
+  'Tudor Pro Cycling Team':             'TPC',
+  'Human Powered Health':               'HPH',
+  'Lotto Dstny':                        'LOD',
+  'Astana Qazaqstan Team':              'AST',
+  'Decathlon AG2R La Mondiale Team':    'DAL',
+  'Alpecin-Deceuninck':                 'ADE',
+};
+
+function teamAbbr(name) {
+  if (!name || name === '—') return name;
+  if (TEAM_ABBR[name]) return TEAM_ABBR[name];
+  // Fallback: first significant word (skip generic words like "Team", "Pro", "Cycling")
+  const skip = new Set(['team','cycling','pro','sport']);
+  const words = name.split(/[\s\-|\/&+]+/).filter(w => w.length > 0);
+  const sig = words.find(w => !skip.has(w.toLowerCase())) || words[0] || name;
+  return sig.length <= 7 ? sig : sig.slice(0, 5);
+}
+
+// ─── Team colour schemes ───────────────────────────────────────────────────────
+// Define 2–3 hex colours per team to style the team name with rotating letter
+// colours in standings tables. Leave the map empty to use plain text for all.
+// Example entry:
+//   'UAE Team Emirates': ['#FF0000', '#FFFFFF'],
+const TEAM_COLOURS = {
+  'UAE Team Emirates - XRG': ['#ffffff', '#a39f9e', '#c44147'],
+  'Team Visma | Lease a Bike': ['#ffff00', '#bfbfbb'],
+  'Red Bull - BORA - hansgrohe': ['#0400ff', '#c44147', '#ffffff'],
+  'Unibet Rose Rockets': ['#ae00ff', '#ff00d9'],
+  'XDS Astana Team': ['#45bfbd', '#ffffff'],
+  'Pinarello Q36.5 Pro Cycling Team': ['#4a5282', '#dbca5a'],
+  'Decathlon CMA CGM Team': ['#a3e3d3', '#303ba1', '#c44147'],
+  'Alpecin-Premier Tech': ['#3838ab', '#c44147'],
+  'Team Jayco AlUla': ['#b02cf2', '#ffffff'],
+  'Bahrain - Victorious': ['#2b3dc4', '#2bd9d9'],
+  'INEOS Grenadiers': ['#d6941a', '#e3e3e3'],
+  'Uno-X Mobility': ['#b03f4c', '#dba81d'],
+  
+};
+
+let COLOUR_NAMES = true;
+
+// displayText is optional — when supplied the colours from `name` are applied
+// to that string instead (used to colour abbreviations with the team's palette).
+function teamNameHtml(name, displayText) {
+  const text = (displayText !== undefined) ? displayText : name;
+  if (!COLOUR_NAMES) return text;
+  const cols = TEAM_COLOURS[name];
+  if (!cols || !cols.length) return text;
+  let ci = 0;
+  return [...text].map(ch => {
+    if (ch === ' ') return ' ';
+    const col = cols[ci % cols.length]; ci++;
+    return `<span style="color:${col}">${ch}</span>`;
+  }).join('');
+}
+
+function toggleColours(btn) {
+  COLOUR_NAMES = !COLOUR_NAMES;
+  btn.classList.toggle('active', COLOUR_NAMES);
+  // Update pill labels for team pills
+  ['team-tl-pills','radar-pills','pyr-pills'].forEach(id => {
+    document.querySelectorAll(`#${id} .pill`).forEach(p => {
+      p.innerHTML = teamNameHtml(p.dataset.val);
+    });
+  });
+  renderTeamTable(); renderRiderTable();
+  renderTeamBar(); renderHHI();
+  renderRiderBar(); renderTeamDetail(); renderRiderDetail();
+}
+
+const BASE_LAYOUT = {
+  paper_bgcolor: 'rgba(0,0,0,0)',
+  plot_bgcolor:  'rgba(0,0,0,0)',
+  font: { family:"'Space Mono',monospace", color:'#888', size:11 },
+  margin: { l:10, r:10, t:24, b:40 },
+  legend: { bgcolor:'rgba(0,0,0,0)', font:{size:10}, orientation:'h', yanchor:'bottom', y:1.02 },
+};
+const GRID = { gridcolor:'#2a2d3a', gridwidth:0.5, zerolinecolor:'#2a2d3a', color:'#555' };
+const CFG  = { displayModeBar:false, responsive:true };
+
+function lay(extra) { return Object.assign({}, BASE_LAYOUT, extra); }
+function clsLabel(v) { return CLS_MAP[v] || v; }
+function fmt(n) { return n == null ? '—' : Number(n).toLocaleString(); }
+function fmtPts(n) { return n == null ? '—' : Number(n).toFixed(1); }
+
+// ─── State ────────────────────────────────────────────────────────────────────
+let DATA = null;
+let YEAR = null;
+let YD   = null;   // shorthand: DATA.data[YEAR]
+let TIER_FILTER = 'both';  // 'both' | 'WT' | 'PRT'
+
+function visibleTeams() {
+  if (!YD) return [];
+  if (TIER_FILTER === 'WT')  return YD.teams.filter(t => t.tier === 'WT');
+  if (TIER_FILTER === 'PRT') return YD.teams.filter(t => t.tier === 'PRT');
+  return YD.teams;
+}
+
+function setTierFilter(v, btn) {
+  TIER_FILTER = v;
+  document.querySelectorAll('#tg-tier .tog-btn').forEach(b => b.classList.toggle('active', b === btn));
+  const names = visibleTeams().map(t => t.name);
+  buildPills('team-tl-pills', names, names.slice(0,5), Infinity, renderTeamTimeline);
+  buildPills('pyr-pills',     names, names.slice(0,2), 3,        renderPyramid);
+  buildPills('radar-pills',   names, names.slice(0,5), Infinity, renderTeamRadar);
+  renderTeamBar(); renderTeamTable(); renderTeamTimeline(); renderPyramid();
+  renderTeamEfficiency(); renderHHI(); renderTeamRadar();
+}
+
+// ─── Tab switching ────────────────────────────────────────────────────────────
+function showTab(name, btn) {
+  document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const tabs = ['teams','riders','races'];
+  tabs.forEach(t => {
+    const el = document.getElementById('tab-' + t);
+    if (el) el.style.display = (t === name) ? '' : 'none';
+  });
+}
+
+// ─── Card toggle ─────────────────────────────────────────────────────────────
+function toggleCard(id) { document.getElementById(id).classList.toggle('collapsed'); }
+
+// ─── Toggle buttons ───────────────────────────────────────────────────────────
+function tog(groupId, btn, cb) {
+  document.querySelectorAll('#'+groupId+' .tog-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  if (cb) cb();
+}
+function tv(groupId) {
+  const b = document.querySelector('#'+groupId+' .tog-btn.active');
+  return b ? b.dataset.v : null;
+}
+
+// ─── Pill multiselect ─────────────────────────────────────────────────────────
+function buildPills(containerId, options, defaultActive, maxActive, onChange) {
+  const c = document.getElementById(containerId);
+  if (!c) return;
+  c._max = maxActive || Infinity;
+  c._onChange = onChange;
+  c.innerHTML = options.map(o => {
+    const active = defaultActive.includes(o) ? 'active' : '';
+    const safe = o.replace(/'/g,"&#39;").replace(/"/g,'&quot;');
+    return `<button class="pill ${active}" data-val="${safe}"
+      onclick="togglePill('${containerId}',this)">${teamNameHtml(o)}</button>`;
+  }).join('');
+}
+function togglePill(containerId, btn) {
+  const c = document.getElementById(containerId);
+  if (!c) return;
+  const isActive = btn.classList.contains('active');
+  const activeCount = c.querySelectorAll('.pill.active').length;
+  if (isActive) {
+    btn.classList.remove('active');
+  } else if (activeCount < (c._max || Infinity)) {
+    btn.classList.add('active');
+  }
+  if (c._onChange) c._onChange();
+}
+function getPills(containerId) {
+  return [...document.querySelectorAll('#'+containerId+' .pill.active')].map(b => b.dataset.val);
+}
+function pillAll(containerId, cb) {
+  const c = document.getElementById(containerId);
+  if (!c) return;
+  const max = c._max || Infinity;
+  let count = 0;
+  c.querySelectorAll('.pill').forEach(b => {
+    b.classList.toggle('active', count < max);
+    if (count < max) count++;
+  });
+  if (cb) cb();
+}
+function pillNone(containerId, cb) {
+  document.querySelectorAll('#'+containerId+' .pill').forEach(b => b.classList.remove('active'));
+  if (cb) cb();
+}
+
+// ─── Date truncation ──────────────────────────────────────────────────────────
+function truncDate(dateStr, agg) {
+  const s = dateStr.slice(0,10);
+  if (agg === 'day') return s;
+  if (agg === 'month') return s.slice(0,7) + '-01';
+  if (agg === 'week') {
+    const d = new Date(s + 'T12:00:00Z');
+    const day = d.getUTCDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    const mon = new Date(d);
+    mon.setUTCDate(d.getUTCDate() + diff);
+    return mon.toISOString().slice(0,10);
+  }
+  return s;
+}
+
+// ─── Timeline builder ─────────────────────────────────────────────────────────
+function buildTimeline(rawData, entityKey, selected, agg, view, logScale) {
+  if (!selected.length) return { traces:[], layout:{} };
+  const grouped = {};
+  for (const row of rawData) {
+    if (!selected.includes(row[entityKey])) continue;
+    const p = truncDate(row.date || '', agg);
+    if (!grouped[row[entityKey]]) grouped[row[entityKey]] = {};
+    grouped[row[entityKey]][p] = (grouped[row[entityKey]][p] || 0) + (row.pts || 0);
+  }
+  const allPeriods = [...new Set(
+    rawData.filter(r => selected.includes(r[entityKey])).map(r => truncDate(r.date||'', agg))
+  )].sort();
+
+  const traces = selected.map((entity, i) => {
+    const d = grouped[entity] || {};
+    let vals = allPeriods.map(p => d[p] || 0);
+    if (view === 'cumulative') {
+      let cum = 0; vals = vals.map(v => cum += v);
+    }
+    const col = PALETTE[i % PALETTE.length];
+    return { x:allPeriods, y:vals, mode:'lines+markers', name:entity,
+      line:{color:col,width:2}, marker:{color:col,size:5} };
+  });
+
+  const yLabel = view === 'cumulative' ? 'Cumulative points' : 'Points';
+  const layout = lay({
+    yaxis: { ...GRID, title:yLabel, type: logScale ? 'log' : 'linear' },
+    xaxis: { ...GRID },
+    height: 420,
+  });
+  return { traces, layout };
+}
+
+// ─── CLS merge ────────────────────────────────────────────────────────────────
+function mergeCls(records, entityKey) {
+  const map = {};
+  for (const r of records) {
+    const cls = clsLabel(r.classification);
+    const key = r[entityKey] + '\x00' + cls;
+    map[key] = (map[key] || 0) + (r.pts || 0);
+  }
+  return Object.entries(map).map(([k, pts]) => {
+    const [entity, cls] = k.split('\x00');
+    return { [entityKey]: entity, classification: cls, pts };
+  });
+}
+
+// ─── KPI helper ───────────────────────────────────────────────────────────────
+function setKPIs(containerId, items) {
+  document.getElementById(containerId).innerHTML = items.map(([label,value,sub]) => `
+    <div class="kpi-card">
+      <div class="kpi-label">${label}</div>
+      <div class="kpi-value">${value}</div>
+      ${sub ? `<div class="kpi-sub">${sub}</div>` : ''}
+    </div>`).join('');
+}
+
+// ─── TEAM CHARTS ──────────────────────────────────────────────────────────────
+function renderTeamBar() {
+  const metric = tv('tg-team-metric') || 'total_points';
+  const n = parseInt(document.getElementById('rng-team-n')?.value || 20);
+
+  // For Form metric, compute from team_timeline
+  const formMap = metric === 'form_30d' ? computeTeamForm(30) : null;
+  const getValue = t => formMap ? (formMap[t.name]||0) : (t[metric]||0);
+
+  const sorted = [...visibleTeams()].sort((a,b) => getValue(b)-getValue(a)).slice(0,n)
+    .map((t,i) => ({...t, _lbl:`${i+1}. ${t.name}`, _val: getValue(t)}));
+  const xTitle = metric === 'pts_per_race' ? 'Points per race'
+               : metric === 'form_30d'     ? 'Points (last 30 days)'
+               : 'UCI points (top 20 riders)';
+  const catArr = sorted.map(t => t._lbl);
+
+  const traces = ['WT','PRT'].map(tier => {
+    const sub = sorted.filter(t => t.tier === tier);
+    if (!sub.length) return null;
+    const vals = sub.map(t => t._val);
+    return { type:'bar', orientation:'h', name:tier,
+      x:vals, y:sub.map(t=>t._lbl), marker:{color:TIER_COLOURS[tier]},
+      text:vals.map(v => metric==='pts_per_race' ? v.toFixed(1) : fmt(v)),
+      textposition:'auto',
+      hovertemplate:'<b>%{y}</b><br>%{x:,.0f}<extra></extra>' };
+  }).filter(Boolean);
+
+  const teamBarAnno = sorted.map((t, i) => ({
+    x: 0, xref: 'paper', y: t._lbl, yref: 'y',
+    text: `${i+1}. ${teamNameHtml(t.name)}`,
+    showarrow: false, xanchor: 'right', align: 'right',
+    font: { size: 11, family: "'Space Mono',monospace", color: '#888' },
+  }));
+  Plotly.react('ch-team-bar', traces, lay({
+    barmode:'overlay',
+    yaxis:{...GRID, autorange:'reversed', categoryorder:'array', categoryarray:catArr,
+           tickfont:{size:11}, showticklabels: !COLOUR_NAMES, automargin: !COLOUR_NAMES},
+    xaxis:{...GRID, title:xTitle},
+    height:Math.max(500,n*28),
+    margin:{l: COLOUR_NAMES ? 220 : 0, r:60, t:24, b:40},
+    legend:{itemclick:false, itemdoubleclick:false},
+    annotations: COLOUR_NAMES ? teamBarAnno : [],
+  }), CFG);
+}
+
+function renderTeamTable() {
+  const teams = visibleTeams();
+  const rows = teams.map(t => `<tr>
+    <td class="c-rank">${t.rank}</td>
+    <td>${teamNameHtml(t.name)}</td>
+    <td class="${TIER_CLASS[t.tier]||'c-oth'}">${t.tier||'—'}</td>
+    <td class="c-pts">${fmt(t.total_points)}</td>
+    <td>${t.riders_scoring||0}</td>
+    <td>${t.races_entered||0}</td>
+    <td>${fmtPts(t.pts_per_race)}</td>
+  </tr>`).join('');
+  document.getElementById('tbl-teams').innerHTML = `
+    <thead><tr>
+      <th>#</th><th>Team</th><th>Tier</th><th>Points</th><th>Riders</th><th>Races</th><th>Pts/Race</th>
+    </tr></thead><tbody>${rows}</tbody>`;
+}
+
+function renderTeamTimeline() {
+  const selected = getPills('team-tl-pills');
+  const view  = tv('tg-team-view')  || 'cumulative';
+  const agg   = tv('tg-team-agg')   || 'day';
+  const scale = tv('tg-team-scale') || 'linear';
+  const { traces, layout } = buildTimeline(YD.team_timeline, 'team', selected, agg, view, scale==='log');
+  Plotly.react('ch-team-tl', traces, layout, CFG);
+}
+
+function renderPyramid() {
+  const container = document.getElementById('pyr-charts');
+  if (!container) return;
+
+  // Build total data
+  const totalMap = {};
+  for (const r of YD.pyramid) {
+    totalMap[r.race_class] = (totalMap[r.race_class] || 0) + (r.pts || 0);
+  }
+  const allVals = PYRAMID_ORDER.map(c => totalMap[c] || 0);
+  const xMax = Math.max(...allVals, 1);
+
+  const selectedTeams = getPills('pyr-pills');
+
+  // Build columns: total + up to 3 selected teams
+  const cols = [{ label:'All teams · total', data: totalMap, xMax, colour: TIER_COLOURS.WT }];
+  const teamMax = selectedTeams.length
+    ? Math.max(...selectedTeams.map(tn => {
+        const m = {};
+        YD.pyramid.filter(r => r.team===tn).forEach(r => m[r.race_class]=(m[r.race_class]||0)+r.pts);
+        return Math.max(...PYRAMID_ORDER.map(c => m[c]||0));
+      }), 1)
+    : 1;
+
+  selectedTeams.forEach((tn, i) => {
+    const m = {};
+    YD.pyramid.filter(r => r.team===tn).forEach(r => m[r.race_class]=(m[r.race_class]||0)+r.pts);
+    cols.push({ label: tn, data: m, xMax: teamMax, colour: PALETTE[i+1] });
+  });
+
+  // Rebuild container divs
+  container.innerHTML = cols.map((_, i) =>
+    `<div class="pyr-col">
+       <div class="pyr-lbl" id="pyr-lbl-${i}"></div>
+       <div id="pyr-ch-${i}" style="height:300px"></div>
+     </div>`
+  ).join('');
+
+  cols.forEach((col, i) => {
+    document.getElementById('pyr-lbl-'+i).textContent = col.label;
+    const pts  = PYRAMID_ORDER.map(c => col.data[c] || 0);
+    const half = col.xMax * 0.62;
+    Plotly.react('pyr-ch-'+i, [{
+      type:'bar', orientation:'h',
+      x: pts, y: PYRAMID_ORDER,
+      base: pts.map(p => -p/2),
+      marker:{ color: col.colour },
+      text: pts.map(p => p > 0 ? fmt(p) : ''),
+      textposition:'auto',
+      customdata: pts,
+      hovertemplate:'%{y}: %{customdata:,.0f} pts<extra></extra>',
+      showlegend: false,
+    }], lay({
+      yaxis:{ categoryorder:'array', categoryarray: PYRAMID_ORDER, tickfont:{size:11}, color:'#888' },
+      xaxis:{ range:[-half,half], showticklabels:false, showgrid:false, zeroline:false },
+      height:300,
+      margin:{ l:10, r:10, t:10, b:10 },
+    }), CFG);
+  });
+}
+
+function renderTeamEfficiency() {
+  const teams = visibleTeams();
+  const seenTiers = [...new Set(teams.map(t => t.tier||'other'))];
+  const traces = seenTiers.map(tier => {
+    const sub = teams.filter(t => (t.tier||'other') === tier);
+    return {
+      type:'scatter', mode:'markers+text', name:tier,
+      x: sub.map(t => t.races_entered||0),
+      y: sub.map(t => t.pts_per_race||0),
+      text: sub.map(t => t.name),
+      textposition:'top center',
+      textfont:{ size:9 },
+      marker:{ color: TIER_COLOURS[tier]||TIER_COLOURS.other,
+               size: sub.map(t => Math.max(8, Math.sqrt((t.total_points||0)/5))),
+               sizemode:'diameter' },
+      hovertemplate:'<b>%{text}</b><br>Races: %{x}<br>Pts/race: %{y:.1f}<extra></extra>',
+    };
+  });
+  Plotly.react('ch-team-eff', traces, lay({
+    xaxis:{ ...GRID, title:'Races entered' },
+    yaxis:{ ...GRID, title:'Points per race' },
+    height: 420,
+  }), CFG);
+}
+
+function renderHHI() {
+  const hhiMap = {};
+  for (const h of YD.hhi) hhiMap[h.team_id] = h.hhi;
+  const withHHI = visibleTeams().map(t => ({...t, hhi: hhiMap[t.team_id]||null}))
+    .filter(t => t.hhi !== null);
+  // Sort all teams by HHI descending regardless of tier
+  const ordered = [...withHHI].sort((a,b) => b.hhi - a.hhi);
+  const catArr  = ordered.map(t => t.name);
+
+  // Bar chart — separate trace per tier, overlay so bars stay in position
+  const barTraces = ['WT','PRT'].map(tier => {
+    const sub = ordered.filter(t => t.tier === tier);
+    if (!sub.length) return null;
+    return {
+      type:'bar', orientation:'h', name:tier,
+      x: sub.map(t => t.hhi),
+      y: sub.map(t => t.name),
+      marker:{ color: TIER_COLOURS[tier] },
+      text: sub.map(t => t.hhi.toFixed(3)),
+      textposition:'outside',
+      hovertemplate:'<b>%{y}</b><br>HHI: %{x:.3f}<extra></extra>',
+    };
+  }).filter(Boolean);
+  const hhiAnno = ordered.map(t => ({
+    x: 0, xref: 'paper', y: t.name, yref: 'y',
+    text: teamNameHtml(t.name),
+    showarrow: false, xanchor: 'right', align: 'right',
+    font: { size: 10, family: "'Space Mono',monospace", color: '#888' },
+  }));
+  Plotly.react('ch-hhi-bar', barTraces, lay({
+    barmode:'overlay',
+    yaxis:{ ...GRID, autorange:'reversed', categoryorder:'array', categoryarray:catArr,
+            tickfont:{size:10}, showticklabels: !COLOUR_NAMES, automargin: !COLOUR_NAMES },
+    xaxis:{ ...GRID, range:[0,1.1], title:'HHI' },
+    height: Math.max(400, ordered.length * 22),
+    margin:{ l: COLOUR_NAMES ? 220 : 0, r:55, t:24, b:40 },
+    legend:{itemclick:false, itemdoubleclick:false},
+    annotations: COLOUR_NAMES ? hhiAnno : [],
+  }), CFG);
+
+  // Scatter
+  const scatTraces = ['WT','PRT'].map(tier => {
+    const sub = ordered.filter(t => t.tier === tier);
+    if (!sub.length) return null;
+    return {
+      type:'scatter', mode:'markers+text', name:tier,
+      x: sub.map(t => t.total_points||0),
+      y: sub.map(t => t.hhi),
+      text: sub.map(t => t.name),
+      textposition:'top center',
+      textfont:{ size:9 },
+      marker:{ color: TIER_COLOURS[tier],
+               size: sub.map(t => Math.max(6, Math.sqrt((t.riders_scoring||1)*10))),
+               sizemode:'diameter' },
+      hovertemplate:'<b>%{text}</b><br>Points: %{x:,.0f}<br>HHI: %{y:.3f}<extra></extra>',
+    };
+  }).filter(Boolean);
+  Plotly.react('ch-hhi-scatter', scatTraces, lay({
+    xaxis:{ ...GRID, title:'Total points' },
+    yaxis:{ ...GRID, range:[0,1.05], title:'HHI (concentration)' },
+    height: Math.max(400, ordered.length * 22),
+  }), CFG);
+}
+
+function renderTeamRadar() {
+  const topTeams = getPills('radar-pills');
+  if (!topTeams.length) return;
+  const merged = mergeCls(YD.cls_breakdown_teams, 'team');
+  const filtered = merged.filter(r => topTeams.includes(r.team));
+  const allCls = [...new Set(filtered.map(r => r.classification))].sort();
+  if (!allCls.length) return;
+
+  const traces = topTeams.map((team, i) => {
+    const sub = filtered.filter(r => r.team === team);
+    const clsMap = Object.fromEntries(sub.map(r => [r.classification, r.pts]));
+    const vals = allCls.map(c => clsMap[c] || 0);
+    const col = PALETTE[i % PALETTE.length];
+    return {
+      type:'scatterpolar', name:team,
+      r:    [...vals, vals[0]],
+      theta:[...allCls, allCls[0]],
+      fill:'toself', opacity:0.55,
+      line:{ color:col }, marker:{ color:col },
+      hovertemplate:'<b>'+team+'</b><br>%{theta}: %{r:,.0f} pts<extra></extra>',
+    };
+  });
+  Plotly.react('ch-team-radar', traces, lay({
+    polar:{ bgcolor:'rgba(0,0,0,0)',
+      radialaxis:{ gridcolor:'#2a2d3a', tickfont:{size:9}, color:'#555' },
+      angularaxis:{ gridcolor:'#2a2d3a', color:'#888' } },
+    height:440, margin:{ l:40, r:40, t:40, b:60 },
+  }), CFG);
+}
+
+// ─── RIDER CHARTS ─────────────────────────────────────────────────────────────
+function renderRiderBar() {
+  const metric = tv('tg-rider-metric') || 'total_points';
+  const n = parseInt(document.getElementById('rng-rider-n')?.value || 25);
+  const sorted = [...YD.riders].sort((a,b) => (b[metric]||0)-(a[metric]||0)).slice(0,n)
+    .map((r,i) => ({...r, _lbl:`${i+1}. ${r.rider}  [${r.team||'—'}]`}));
+  const xTitle = metric === 'pts_per_race' ? 'Points per race' : 'UCI points';
+  const catArr = sorted.map(r => r._lbl);
+
+  // Group by every tier present (riders may be WT, PRT, CT, other, or null)
+  const tiers = [...new Set(sorted.map(r => r.tier||'other'))];
+  const traces = tiers.map(tier => {
+    const sub = sorted.filter(r => (r.tier||'other') === tier);
+    const vals = sub.map(r => r[metric]||0);
+    return { type:'bar', orientation:'h', name:tier,
+      x:vals, y:sub.map(r=>r._lbl),
+      marker:{color: TIER_COLOURS[tier]||TIER_COLOURS.other},
+      text:vals.map(v => metric==='pts_per_race' ? v.toFixed(1) : fmt(v)),
+      textposition:'auto',
+      hovertemplate:'<b>%{y}</b><br>%{x:,.0f}<extra></extra>' };
+  });
+
+  const riderBarAnno = sorted.map((r, i) => ({
+    x: 0, xref: 'paper', y: r._lbl, yref: 'y',
+    text: `${i+1}. ${r.rider}  [${teamNameHtml(r.team||'—', teamAbbr(r.team||'—'))}]`,
+    showarrow: false, xanchor: 'right', align: 'right',
+    font: { size: 11, family: "'Space Mono',monospace", color: '#888' },
+  }));
+  Plotly.react('ch-rider-bar', traces, lay({
+    barmode:'overlay',
+    yaxis:{...GRID, autorange:'reversed', categoryorder:'array', categoryarray:catArr,
+           tickfont:{size:11}, showticklabels: !COLOUR_NAMES, automargin: !COLOUR_NAMES},
+    xaxis:{...GRID, title:xTitle},
+    height:Math.max(560,n*27),
+    margin:{l: COLOUR_NAMES ? 320 : 0, r:60, t:24, b:40},
+    annotations: COLOUR_NAMES ? riderBarAnno : [],
+  }), CFG);
+}
+
+function renderRiderTable() {
+  const riders = YD.riders;
+  const rows = riders.map(r => `<tr>
+    <td class="c-rank">${r.rank}</td>
+    <td>${r.rider}</td>
+    <td style="color:#666">${r.nat||'—'}</td>
+    <td style="color:#aaa;font-size:11px">${teamNameHtml(r.team||'—', teamAbbr(r.team||'—'))}</td>
+    <td class="${TIER_CLASS[r.tier]||'c-oth'}">${r.tier||'—'}</td>
+    <td class="c-pts">${fmt(r.total_points)}</td>
+    <td>${r.races_scored||0}</td>
+    <td>${fmtPts(r.pts_per_race)}</td>
+  </tr>`).join('');
+  document.getElementById('tbl-riders').innerHTML = `
+    <thead><tr>
+      <th>#</th><th>Rider</th><th>Nat</th><th>Team</th><th>Tier</th>
+      <th>Points</th><th>Races</th><th>Pts/Race</th>
+    </tr></thead><tbody>${rows}</tbody>`;
+}
+
+function renderRiderTimeline() {
+  const selected = getPills('rider-tl-pills');
+  const view  = tv('tg-rider-view')  || 'cumulative';
+  const agg   = tv('tg-rider-agg')   || 'day';
+  const scale = tv('tg-rider-scale') || 'linear';
+  const { traces, layout } = buildTimeline(YD.rider_timeline, 'rider', selected, agg, view, scale==='log');
+  Plotly.react('ch-rider-tl', traces, layout, CFG);
+}
+
+function renderRiderNat() {
+  const nat = YD.nat_breakdown || [];
+  if (!nat.length) return;
+  Plotly.react('ch-rider-nat', [{
+    type:'bar',
+    x: nat.map(r => r.nat),
+    y: nat.map(r => r.pts),
+    marker:{ color: nat.map((_,i) => PALETTE[i%PALETTE.length]) },
+    text: nat.map(r => fmt(r.pts)),
+    textposition:'outside',
+    hovertemplate:'%{x}: %{y:,.0f} pts<extra></extra>',
+  }], lay({
+    xaxis:{ ...GRID, title:'Nationality' },
+    yaxis:{ ...GRID, title:'Points' },
+    height: 360,
+    showlegend: false,
+    margin:{ l:10, r:10, t:24, b:50 },
+  }), CFG);
+}
+
+function renderRiderCls() {
+  const n = parseInt(document.getElementById('rng-cls-n')?.value || 20);
+  const merged = mergeCls(YD.cls_breakdown_riders, 'rider');
+  // Use global standings order (YD.riders is sorted by total_points desc)
+  const inData = new Set(merged.map(r => r.rider));
+  const topN = YD.riders.filter(r => inData.has(r.rider)).slice(0, n).map(r => r.rider);
+  if (!topN.length) return;
+  const filtered = merged.filter(r => topN.includes(r.rider));
+  const allCls = [...new Set(filtered.map(r => r.classification))].sort();
+
+  const traces = allCls.map((cls, i) => {
+    const sub = filtered.filter(r => r.classification === cls);
+    const byRider = Object.fromEntries(sub.map(r => [r.rider, r.pts]));
+    return {
+      type:'bar', orientation:'h', name:cls,
+      x: topN.map(r => byRider[r]||0),
+      y: topN,
+      marker:{ color: PALETTE[i%PALETTE.length] },
+      hovertemplate:`%{y} · ${cls}: %{x:,.0f} pts<extra></extra>`,
+    };
+  });
+  // categoryarray reversed so rank-1 is at top with autorange:'reversed'
+  Plotly.react('ch-rider-cls', traces, lay({
+    barmode:'stack',
+    yaxis:{ ...GRID, autorange:'reversed', tickfont:{size:11},
+            categoryorder:'array', categoryarray:[...topN],
+            automargin:true },
+    xaxis:{ ...GRID, title:'Points' },
+    height: Math.max(520, topN.length*28),
+    margin:{ l:0, r:10, t:24, b:40 },
+  }), CFG);
+}
+
+// ─── Form helper (last N days from team_timeline / rider_timeline) ────────────
+function computeTeamForm(daysBack) {
+  const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - daysBack);
+  const cutStr = cutoff.toISOString().slice(0,10);
+  const form = {};
+  for (const r of (YD.team_timeline||[])) {
+    if ((r.date||'').slice(0,10) >= cutStr) form[r.team] = (form[r.team]||0)+(r.pts||0);
+  }
+  return form;
+}
+
+// ─── Team detail ──────────────────────────────────────────────────────────────
+function renderTeamDetail() {
+  const teamName = document.getElementById('sel-team-detail')?.value;
+  if (!teamName || !YD) return;
+
+  // All riders for this team from the dedicated team_riders export
+  const teamRiders = (YD.team_riders||[]).filter(r => r.team === teamName);
+
+  const team = YD.teams.find(t => t.name === teamName);
+  const col  = TIER_COLOURS[team?.tier] || PALETTE[0];
+
+  Plotly.react('ch-team-detail-riders', [{
+    type:'bar', orientation:'h',
+    x: teamRiders.map(r => r.pts||0),
+    y: teamRiders.map(r => r.rider),
+    marker:{ color: col },
+    text: teamRiders.map(r => fmt(r.pts)),
+    textposition:'auto',
+    hovertemplate:'<b>%{y}</b><br>%{x:,.0f} pts · %{customdata} races<extra></extra>',
+    customdata: teamRiders.map(r => r.races_scored||0),
+  }], lay({
+    showlegend:false,
+    yaxis:{...GRID, autorange:'reversed', automargin:true, tickfont:{size:11}},
+    xaxis:{...GRID, title:'Points'},
+    height: Math.max(300, teamRiders.length*24),
+    margin:{l:0,r:60,t:30,b:40},
+    title:{text:'Rider points', font:{size:11,color:'#888'}, x:0},
+  }), CFG);
+
+  // Classification breakdown
+  const clsRaw = (YD.cls_breakdown_teams||[]).filter(r => r.team === teamName);
+  const clsMerged = mergeCls(clsRaw, 'team').sort((a,b) => b.pts - a.pts);
+  if (clsMerged.length) {
+    Plotly.react('ch-team-detail-cls', [{
+      type:'bar', orientation:'h',
+      x: clsMerged.map(r => r.pts),
+      y: clsMerged.map(r => r.classification),
+      marker:{ color: clsMerged.map((_,i) => PALETTE[i%PALETTE.length]) },
+      text: clsMerged.map(r => fmt(r.pts)),
+      textposition:'auto',
+      hovertemplate:'<b>%{y}</b><br>%{x:,.0f} pts<extra></extra>',
+    }], lay({
+      showlegend:false,
+      yaxis:{...GRID, autorange:'reversed', automargin:true},
+      xaxis:{...GRID, title:'Points'},
+      height:280,
+      margin:{l:0,r:60,t:30,b:40},
+      title:{text:'Points by classification', font:{size:11,color:'#888'}, x:0},
+    }), CFG);
+  }
+}
+
+// ─── Rider detail ─────────────────────────────────────────────────────────────
+let _rdSortCol = 'date', _rdSortAsc = false;
+
+function renderRiderDetail() {
+  const inp = document.getElementById('inp-rider-detail');
+  const riderName = inp?.value?.trim();
+  if (!riderName || !YD) return;
+  if (!YD.riders.some(r => r.rider === riderName)) return;
+
+  const rider = YD.riders.find(r => r.rider === riderName);
+
+  // Info panel
+  document.getElementById('rider-detail-info').innerHTML = rider ? `
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px 20px;padding:8px 0 12px">
+      ${[
+        ['Team',         teamNameHtml(rider.team||'—')],
+        ['Nationality',  rider.nat||'—'],
+        ['Total points', `<span style="color:#c8f23a;font-weight:700">${fmt(rider.total_points)}</span>`],
+        ['Races scored', rider.races_scored||0],
+        ['Best result',  fmt(rider.best_result)],
+        ['Pts / race',   fmtPts(rider.pts_per_race)],
+      ].map(([l,v]) => `<div><div style="color:#555;font-size:10px;text-transform:uppercase;letter-spacing:.08em">${l}</div><div style="color:#d0d0e0;margin-top:2px">${v}</div></div>`).join('')}
+    </div>` : '';
+
+  // Classification breakdown
+  const clsRaw = (YD.cls_breakdown_riders||[]).filter(r => r.rider === riderName);
+  const clsMerged = mergeCls(clsRaw, 'rider').sort((a,b) => b.pts - a.pts);
+  if (clsMerged.length) {
+    Plotly.react('ch-rider-detail-cls', [{
+      type:'bar', orientation:'h',
+      x: clsMerged.map(r => r.pts),
+      y: clsMerged.map(r => r.classification),
+      marker:{ color: clsMerged.map((_,i) => PALETTE[i%PALETTE.length]) },
+      text: clsMerged.map(r => fmt(r.pts)),
+      textposition:'auto',
+      hovertemplate:'<b>%{y}</b><br>%{x:,.0f} pts<extra></extra>',
+    }], lay({
+      showlegend:false,
+      yaxis:{...GRID, autorange:'reversed', automargin:true},
+      xaxis:{...GRID, title:'Points'},
+      height:200, margin:{l:0,r:60,t:8,b:40},
+    }), CFG);
+  } else {
+    document.getElementById('ch-rider-detail-cls').innerHTML =
+      '<p style="color:#555;padding:8px 0;font-size:11px">No classification data available</p>';
+  }
+
+  // Race results table
+  renderRiderResultsTable(riderName);
+}
+
+function sortRiderResults(col) {
+  if (_rdSortCol === col) { _rdSortAsc = !_rdSortAsc; }
+  else { _rdSortCol = col; _rdSortAsc = col !== 'pts'; }
+  const inp = document.getElementById('inp-rider-detail');
+  if (inp?.value) renderRiderResultsTable(inp.value.trim());
+}
+
+function renderRiderResultsTable(riderName) {
+  const raw = (YD.rider_results||[]).filter(r => r.rider === riderName);
+  const el  = document.getElementById('tbl-rider-results');
+  if (!el) return;
+
+  // Sort
+  const col = _rdSortCol;
+  const asc = _rdSortAsc;
+  const sorted = [...raw].sort((a, b) => {
+    let va = a[col] ?? '', vb = b[col] ?? '';
+    if (col === 'pts' || col === 'finish_pos') { va = Number(va)||0; vb = Number(vb)||0; }
+    else { va = String(va); vb = String(vb); }
+    return asc ? (va > vb ? 1 : va < vb ? -1 : 0) : (va < vb ? 1 : va > vb ? -1 : 0);
+  });
+
+  const cols = [
+    { key:'date',           label:'Date' },
+    { key:'race',           label:'Race' },
+    { key:'race_class',     label:'Class' },
+    { key:'classification', label:'Type' },
+    { key:'stage_num',      label:'Stage' },
+    { key:'finish_pos',     label:'Pos' },
+    { key:'pts',            label:'Pts' },
+  ];
+
+  const hdrs = cols.map(c => {
+    const cls = ['sortable', c.key===_rdSortCol ? (_rdSortAsc?'sort-asc':'sort-desc') : ''].join(' ').trim();
+    return `<th class="${cls}" onclick="sortRiderResults('${c.key}')">${c.label}</th>`;
+  }).join('');
+
+  const rows = sorted.map(r => `<tr>
+    <td style="white-space:nowrap">${(r.date||'').slice(0,10)}</td>
+    <td>${r.race||'—'}</td>
+    <td>${r.race_class||'—'}</td>
+    <td>${clsLabel(r.classification)||'—'}</td>
+    <td style="color:#666">${r.stage_num != null ? r.stage_num : '—'}</td>
+    <td style="color:#666">${r.finish_pos != null ? r.finish_pos : '—'}</td>
+    <td class="c-pts">${fmt(r.pts)}</td>
+  </tr>`).join('');
+
+  el.innerHTML = `<thead><tr>${hdrs}</tr></thead><tbody>${rows}</tbody>`;
+}
+
+// ─── Initialise year data ─────────────────────────────────────────────────────
+function initYear() {
+  const raw = DATA.data[YEAR];
+  if (!raw) return;
+  // Shallow-copy; filter teams to WorldTour + ProSeries only
+  YD = { ...raw };
+  YD.teams  = raw.teams.filter(t => t.tier === 'WT' || t.tier === 'PRT');
+  YD.riders = raw.riders;  // keep all exported riders
+  TIER_FILTER = 'both';
+
+  // Team KPIs
+  const teams = YD.teams;
+  setKPIs('team-kpis', [
+    ['Teams', teams.length],
+    ['Total points', fmt(teams.reduce((s,t)=>s+(t.total_points||0),0))],
+    ['Leader', teams[0]?.name || '—'],
+    ['Leader points', fmt(teams[0]?.total_points)],
+  ]);
+
+  // Rider KPIs
+  const riders = YD.riders;
+  setKPIs('rider-kpis', [
+    ['Riders scoring', riders.length],
+    ['Points distributed', fmt(riders.reduce((s,r)=>s+(r.total_points||0),0))],
+    ['Leader', riders[0]?.rider || '—'],
+    ['Leader points', fmt(riders[0]?.total_points)],
+  ]);
+
+  // Build team timeline pills (default top 5)
+  const teamNames  = teams.map(t => t.name);
+  buildPills('team-tl-pills', teamNames, teamNames.slice(0,5), Infinity, renderTeamTimeline);
+
+  // Build rider timeline pills (default top 5)
+  const riderNames = riders.map(r => r.rider);
+  buildPills('rider-tl-pills', riderNames, riderNames.slice(0,15), Infinity, renderRiderTimeline);
+
+  // Build pyramid pills (max 3 teams, default first 2)
+  buildPills('pyr-pills', teamNames, teamNames.slice(0,2), 3, renderPyramid);
+
+  // Build radar pills (default top 5)
+  buildPills('radar-pills', teamNames, teamNames.slice(0,5), Infinity, renderTeamRadar);
+
+  // Populate detail selectors
+  const tdSel = document.getElementById('sel-team-detail');
+  if (tdSel) { tdSel.innerHTML = teams.map(t => `<option>${t.name}</option>`).join(''); }
+
+  // Rider detail: datalist input
+  const rdDl = document.getElementById('dl-riders');
+  const rdInp = document.getElementById('inp-rider-detail');
+  if (rdDl) rdDl.innerHTML = riders.map(r => `<option value="${r.rider.replace(/"/g,'&quot;')}">`).join('');
+  if (rdInp) rdInp.value = riders[0]?.rider || '';
+
+  // Render all charts
+  renderTeamBar();
+  renderTeamTable();
+  renderTeamTimeline();
+  renderPyramid();
+  renderTeamEfficiency();
+  renderHHI();
+  renderTeamRadar();
+  renderRiderBar();
+  renderRiderTable();
+  renderRiderTimeline();
+  renderRiderCls();
+  renderTeamDetail();
+  renderRiderDetail();
+
+  // ── Race tab ──
+  const raceStats  = YD.race_stats  || [];
+  const stageStats = YD.stage_stats || [];
+  const topSQ      = raceStats[0];
+  const topProf    = [...stageStats].sort((a,b)=>(b.profile_score||0)-(a.profile_score||0))[0];
+  const topVert    = [...stageStats].sort((a,b)=>(b.vertical_meters||0)-(a.vertical_meters||0))[0];
+  const topDist    = [...stageStats].sort((a,b)=>(b.distance_km||0)-(a.distance_km||0))[0];
+  setKPIs('race-kpis', [
+    ['Races tracked',   raceStats.length],
+    ['Best startlist',  topSQ   ? `${topSQ.name} · ${topSQ.startlist_quality}`                          : '—'],
+    ['Hardest stage',   topProf ? `${stageLabel(topProf)} · ${topProf.profile_score}`                   : '—'],
+    ['Most climbing',   topVert ? `${stageLabel(topVert)} · ${fmt(topVert.vertical_meters)} m`          : '—'],
+  ]);
+  renderRaceStartlist();
+  renderRaceQualityScatter();
+  renderRaceProfile();
+  renderRaceVert();
+  renderRaceDist();
+}
+
+// ─── RACE / STAGE CHARTS ──────────────────────────────────────────────────────
+function _raceBarTraces(sorted, xKey, hoverExtra) {
+  const classes = [...new Set(sorted.map(d => d.race_class||d.cls))];
+  return classes.map(cls => {
+    const sub = sorted.filter(d => (d.race_class||d.cls) === cls);
+    return {
+      type:'bar', orientation:'h', name:cls,
+      x: sub.map(d => d[xKey]||0),
+      y: sub.map(d => d._lbl),
+      marker:{ color: raceCls(cls) },
+      text: sub.map(d => {
+        const v = d[xKey]||0;
+        return xKey==='distance_km' ? v.toFixed(0)+' km' : fmt(v)+(xKey==='vertical_meters'?' m':'');
+      }),
+      textposition:'outside',
+      customdata: sub.map(d => hoverExtra(d)),
+      hovertemplate: hoverTpl(xKey),
+    };
+  });
+}
+
+function hoverTpl(xKey) {
+  if (xKey==='startlist_quality')
+    return '<b>%{y}</b><br>Startlist: %{x}<br>Dist: %{customdata[0]} km · Vert: %{customdata[1]:,} m · Pts: %{customdata[2]:,.0f}<extra></extra>';
+  if (xKey==='profile_score')
+    return '<b>%{y}</b><br>Profile: %{x}<br>Vert: %{customdata[0]:,} m · Dist: %{customdata[1]:.0f} km<extra></extra>';
+  if (xKey==='vertical_meters')
+    return '<b>%{y}</b><br>Vert: %{x:,} m<br>Profile: %{customdata[0]} · Dist: %{customdata[1]:.0f} km<extra></extra>';
+  if (xKey==='distance_km')
+    return '<b>%{y}</b><br>Dist: %{x:.0f} km<br>Vert: %{customdata[0]:,} m · Profile: %{customdata[1]}<extra></extra>';
+  return '<b>%{y}</b><br>%{x}<extra></extra>';
+}
+
+function _raceBarLayout(sorted, n, xTitle, marginL) {
+  const catArr = sorted.map(d => d._lbl);
+  const annotations = sorted.map(d => ({
+    x:0, xref:'paper', y:d._lbl, yref:'y',
+    text: d._lbl,
+    showarrow:false, xanchor:'right', align:'right',
+    font:{ size:10, family:"'Space Mono',monospace", color: raceCls(d.race_class||d.cls) },
+  }));
+  return lay({
+    barmode:'overlay',
+    yaxis:{...GRID, autorange:'reversed', categoryorder:'array', categoryarray:catArr, showticklabels:false},
+    xaxis:{...GRID, title:xTitle},
+    height: Math.max(400, n*22),
+    margin:{ l:marginL, r:80, t:24, b:40 },
+    legend:{itemclick:false, itemdoubleclick:false},
+    annotations: annotations,
+  });
+}
+
+function renderRaceStartlist() {
+  const n = parseInt(document.getElementById('rng-sq-n')?.value||30);
+  const sorted = [...(YD.race_stats||[])].filter(d => d.startlist_quality!=null)
+    .sort((a,b) => (b.startlist_quality||0)-(a.startlist_quality||0)).slice(0,n)
+    .map(d => ({...d, _lbl:d.name}));
+  const traces = _raceBarTraces(sorted, 'startlist_quality', d=>[d.total_dist,d.total_vert,d.total_points]);
+  Plotly.react('ch-race-sq', traces, _raceBarLayout(sorted, n, 'Startlist quality', 230), CFG);
+  const el = document.getElementById('ch-race-sq');
+  el.removeAllListeners('plotly_click');
+  el.on('plotly_click', function(data) {
+    if (!data.points.length) return;
+    showRaceResultPopup(data.points[0].y, data.event);
+  });
+}
+
+function getRacePopupEl() {
+  let el = document.getElementById('race-result-popup');
+  if (el) return el;
+  el = document.createElement('div');
+  el.id = 'race-result-popup';
+  el.style.cssText = 'position:fixed;z-index:9999;background:#1a1c24;border:1px solid #2a2d3a;' +
+    'border-radius:8px;padding:12px 16px;min-width:300px;max-width:380px;' +
+    'font-family:\'Space Mono\',monospace;font-size:11px;color:#d0d0e0;' +
+    'box-shadow:0 8px 28px rgba(0,0,0,.7);display:none;pointer-events:auto;';
+  document.body.appendChild(el);
+  document.addEventListener('click', function(e) {
+    if (!document.getElementById('race-result-popup')?.contains(e.target))
+      document.getElementById('race-result-popup').style.display = 'none';
+  }, true);
+  return el;
+}
+
+function showRaceResultPopup(raceName, evt) {
+  const raceInfo = (YD.race_stats||[]).find(r => r.name === raceName);
+  if (!raceInfo) return;
+
+  const cls = raceInfo.is_stage_race ? 'gc' : 'result';
+  const label = raceInfo.is_stage_race ? 'GC' : 'Result';
+
+  const top10 = [...(YD.rider_results||[])]
+    .filter(r => r.race === raceName && r.classification === cls)
+    .sort((a, b) => (a.finish_pos||999) - (b.finish_pos||999))
+    .slice(0, 10);
+
+  if (!top10.length) return;
+
+  const rows = top10.map(r => `<tr>
+    <td style="color:#555;padding:4px 6px 4px 0;width:20px">${r.finish_pos||'—'}</td>
+    <td style="padding:4px 8px 4px 0">${r.rider}</td>
+    <td style="color:#aaa;font-size:10px;padding:4px 8px 4px 0;white-space:nowrap">${teamNameHtml(r.team||'—', teamAbbr(r.team||'—'))}</td>
+    <td style="color:#c8f23a;text-align:right;padding:4px 0;white-space:nowrap">${fmt(r.pts)} pts</td>
+  </tr>`).join('');
+
+  const popup = getRacePopupEl();
+  popup.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">
+      <span style="color:#d0d0e0;font-weight:700">${raceName}</span>
+      <span style="color:#555;font-size:10px;margin-left:12px">${label} · SQ ${raceInfo.startlist_quality}</span>
+    </div>
+    <table style="width:100%;border-collapse:collapse">${rows}</table>
+    <div style="color:#333;font-size:9px;margin-top:8px;text-align:right">click elsewhere to close</div>`;
+
+  popup.style.display = 'block';
+  const x = Math.min(evt.clientX + 16, window.innerWidth  - 400);
+  const y = Math.min(evt.clientY - 10,  window.innerHeight - 320);
+  popup.style.left = Math.max(8, x) + 'px';
+  popup.style.top  = Math.max(8, y) + 'px';
+}
+
+function renderRaceQualityScatter() {
+  const data = (YD.race_stats||[]).filter(d => d.startlist_quality!=null && d.total_points>0);
+  const classes = [...new Set(data.map(d => d.race_class))];
+  const traces = classes.map(cls => {
+    const sub = data.filter(d => d.race_class===cls);
+    return {
+      type:'scatter', mode:'markers+text', name:cls,
+      x: sub.map(d => d.startlist_quality),
+      y: sub.map(d => d.total_points),
+      text: sub.map(d => d.name),
+      textposition:'top center', textfont:{size:8},
+      marker:{ color:raceCls(cls), size:10 },
+      hovertemplate:'<b>%{text}</b><br>Startlist: %{x}<br>Total pts: %{y:,.0f}<extra></extra>',
+    };
+  });
+  Plotly.react('ch-race-sq-scatter', traces, lay({
+    xaxis:{...GRID, title:'Startlist quality'},
+    yaxis:{...GRID, title:'Total points awarded'},
+    height:420,
+  }), CFG);
+}
+
+function renderRaceProfile() {
+  const n = parseInt(document.getElementById('rng-prof-n')?.value||30);
+  const sorted = [...(YD.stage_stats||[])].filter(d => d.profile_score>0)
+    .sort((a,b) => (b.profile_score||0)-(a.profile_score||0)).slice(0,n)
+    .map(d => ({...d, _lbl:stageLabel(d)}));
+  const traces = _raceBarTraces(sorted, 'profile_score', d=>[d.vertical_meters||0, d.distance_km||0]);
+  Plotly.react('ch-race-profile', traces, _raceBarLayout(sorted, n, 'Profile score', 260), CFG);
+}
+
+function renderRaceVert() {
+  const n = parseInt(document.getElementById('rng-vert-n')?.value||30);
+  const sorted = [...(YD.stage_stats||[])].filter(d => d.vertical_meters>0)
+    .sort((a,b) => (b.vertical_meters||0)-(a.vertical_meters||0)).slice(0,n)
+    .map(d => ({...d, _lbl:stageLabel(d)}));
+  const traces = _raceBarTraces(sorted, 'vertical_meters', d=>[d.profile_score||0, d.distance_km||0]);
+  Plotly.react('ch-race-vert', traces, _raceBarLayout(sorted, n, 'Vertical meters', 260), CFG);
+}
+
+function renderRaceDist() {
+  const n = parseInt(document.getElementById('rng-dist-n')?.value||30);
+  const sorted = [...(YD.stage_stats||[])].filter(d => d.distance_km>0)
+    .sort((a,b) => (b.distance_km||0)-(a.distance_km||0)).slice(0,n)
+    .map(d => ({...d, _lbl:stageLabel(d)}));
+  const traces = _raceBarTraces(sorted, 'distance_km', d=>[d.vertical_meters||0, d.profile_score||0]);
+  Plotly.react('ch-race-dist', traces, _raceBarLayout(sorted, n, 'Distance (km)', 260), CFG);
+}
+
+// ─── Year selector ────────────────────────────────────────────────────────────
+function onYearChange() {
+  YEAR = document.getElementById('yr-sel').value;
+  initYear();
+}
+
+// ─── Boot ─────────────────────────────────────────────────────────────────────
+async function init() {
+  const main = document.getElementById('main-content');
+  try {
+    const res = await fetch('uci_data.json?v=' + Date.now());
+    if (!res.ok) throw new Error(res.statusText);
+    DATA = await res.json();
+  } catch (e) {
+    main.innerHTML = `<div class="err-box">
+      <h3>No data found</h3>
+      <p>Run <code>python export_data.py</code> in the dashboard directory,<br>
+         then serve the folder: <code>python -m http.server 8080</code><br>
+         and open <code>http://localhost:8080/uci_dashboard.html</code></p>
+    </div>`;
+    return;
+  }
+
+  // Populate year selector
+  const sel = document.getElementById('yr-sel');
+  sel.innerHTML = DATA.years.map(y => `<option value="${y}">${y}</option>`).join('');
+  YEAR = String(DATA.years[0]);
+  sel.value = YEAR;
+
+  // Clone both templates into main
+  main.innerHTML = '';
+  main.appendChild(document.getElementById('tpl-teams').content.cloneNode(true));
+  main.appendChild(document.getElementById('tpl-riders').content.cloneNode(true));
+  main.appendChild(document.getElementById('tpl-races').content.cloneNode(true));
+
+  initYear();
+}
+
+init();
+</script>
+</body>
+</html>
