@@ -487,6 +487,7 @@
             <span class="rng-val" id="rv-sq-n">30</span>
           </div>
         </div>
+        <div id="sq-level-pills" class="sel-btns" style="margin-bottom:8px"></div>
         <div id="ch-race-sq" style="min-height:500px"></div>
       </div>
     </div>
@@ -494,7 +495,24 @@
     <div class="card" id="c-race-sq-scatter">
       <button class="card-toggle" onclick="toggleCard('c-race-sq-scatter')">Points vs start quality <span class="toggle-icon">▼</span></button>
       <div class="card-body">
+        <div id="scatter-level-pills" class="sel-btns" style="margin-bottom:8px"></div>
         <div id="ch-race-sq-scatter" style="min-height:420px"></div>
+      </div>
+    </div>
+
+    <div class="card" id="c-race-pts-per-sq">
+      <button class="card-toggle" onclick="toggleCard('c-race-pts-per-sq')">Points per start quality <span class="toggle-icon">▼</span></button>
+      <div class="card-body">
+        <div class="ctrl-row">
+          <span class="ctrl-label">Top</span>
+          <div class="rng-wrap">
+            <input type="range" id="rng-ppsq-n" min="5" max="80" value="30"
+              oninput="document.getElementById('rv-ppsq-n').textContent=this.value;renderRacePtsPerSQ()">
+            <span class="rng-val" id="rv-ppsq-n">30</span>
+          </div>
+        </div>
+        <div id="ppsq-level-pills" class="sel-btns" style="margin-bottom:8px"></div>
+        <div id="ch-race-pts-per-sq" style="min-height:500px"></div>
       </div>
     </div>
 
@@ -509,6 +527,7 @@
             <span class="rng-val" id="rv-prof-n">30</span>
           </div>
         </div>
+        <div id="prof-level-pills" class="sel-btns" style="margin-bottom:8px"></div>
         <div id="ch-race-profile" style="min-height:500px"></div>
       </div>
     </div>
@@ -524,6 +543,7 @@
             <span class="rng-val" id="rv-vert-n">30</span>
           </div>
         </div>
+        <div id="vert-level-pills" class="sel-btns" style="margin-bottom:8px"></div>
         <div id="ch-race-vert" style="min-height:500px"></div>
       </div>
     </div>
@@ -539,6 +559,7 @@
             <span class="rng-val" id="rv-dist-n">30</span>
           </div>
         </div>
+        <div id="dist-level-pills" class="sel-btns" style="margin-bottom:8px"></div>
         <div id="ch-race-dist" style="min-height:500px"></div>
       </div>
     </div>
@@ -1466,8 +1487,18 @@ function initYear() {
     ['Hardest stage',   topProf ? `${stageLabel(topProf)} · ${topProf.profile_score}`                   : '—'],
     ['Most climbing',   topVert ? `${stageLabel(topVert)} · ${fmt(topVert.vertical_meters)} m`          : '—'],
   ]);
+  // Build race-level filter pills for all race plots (UWT + Pro active by default)
+  const defaultLevels = ['UWT','Pro'];
+  buildPills('sq-level-pills',      RACE_LEVELS, defaultLevels, Infinity, renderRaceStartlist);
+  buildPills('scatter-level-pills', RACE_LEVELS, defaultLevels, Infinity, renderRaceQualityScatter);
+  buildPills('ppsq-level-pills',    RACE_LEVELS, defaultLevels, Infinity, renderRacePtsPerSQ);
+  buildPills('prof-level-pills',    RACE_LEVELS, defaultLevels, Infinity, renderRaceProfile);
+  buildPills('vert-level-pills',    RACE_LEVELS, defaultLevels, Infinity, renderRaceVert);
+  buildPills('dist-level-pills',    RACE_LEVELS, defaultLevels, Infinity, renderRaceDist);
+
   renderRaceStartlist();
   renderRaceQualityScatter();
+  renderRacePtsPerSQ();
   renderRaceProfile();
   renderRaceVert();
   renderRaceDist();
@@ -1546,7 +1577,9 @@ function _raceBarLayout(sorted, n, xTitle, marginL) {
 
 function renderRaceStartlist() {
   const n = parseInt(document.getElementById('rng-sq-n')?.value||30);
-  const sorted = [...(YD.race_stats||[])].filter(d => d.startlist_quality!=null)
+  const active = getPills('sq-level-pills');
+  const sorted = [...(YD.race_stats||[])]
+    .filter(d => d.startlist_quality != null && matchRaceLevel(d.race_class, active))
     .sort((a,b) => (b.startlist_quality||0)-(a.startlist_quality||0)).slice(0,n)
     .map(d => ({...d, _lbl:d.name}));
   const traces = _raceBarTraces(sorted, 'startlist_quality', d=>[d.total_dist,d.total_vert,d.total_points]);
@@ -1614,7 +1647,9 @@ function showRaceResultPopup(raceName, evt) {
 }
 
 function renderRaceQualityScatter() {
-  const data = (YD.race_stats||[]).filter(d => d.startlist_quality!=null && d.total_points>0);
+  const active = getPills('scatter-level-pills');
+  const data = (YD.race_stats||[]).filter(d =>
+    d.startlist_quality != null && d.total_points > 0 && matchRaceLevel(d.race_class, active));
   const classes = [...new Set(data.map(d => d.race_class))];
   const traces = classes.map(cls => {
     const sub = data.filter(d => d.race_class===cls);
@@ -1635,9 +1670,36 @@ function renderRaceQualityScatter() {
   }), CFG);
 }
 
+// Maps pill label → race_class matcher — shared across all race plots
+const RACE_LEVEL_MAP = {
+  'UWT':  c => c==='1.UWT'||c==='2.UWT',
+  'Pro':  c => c==='1.Pro'||c==='2.Pro',
+  '.1':   c => c==='1.1'||c==='2.1',
+  '.2':   c => c==='1.2'||c==='2.2',
+  'NC':   c => c==='NC'||c?.startsWith('NC'),
+};
+const RACE_LEVELS = Object.keys(RACE_LEVEL_MAP);
+function matchRaceLevel(raceClass, active) {
+  return active.some(lbl => (RACE_LEVEL_MAP[lbl]||(() => false))(raceClass));
+}
+
+function renderRacePtsPerSQ() {
+  const n = parseInt(document.getElementById('rng-ppsq-n')?.value||30);
+  const active = getPills('ppsq-level-pills');
+  const sorted = [...(YD.race_stats||[])]
+    .filter(d => d.startlist_quality && d.total_points && matchRaceLevel(d.race_class, active))
+    .map(d => ({...d, _ppsq: Math.round(d.total_points / d.startlist_quality * 100) / 100, _lbl: d.name}))
+    .sort((a,b) => b._ppsq - a._ppsq)
+    .slice(0, n);
+  const traces = _raceBarTraces(sorted, '_ppsq', d=>[d.startlist_quality, d.total_points]);
+  Plotly.react('ch-race-pts-per-sq', traces, _raceBarLayout(sorted, n, 'Points / start quality', 230), CFG);
+}
+
 function renderRaceProfile() {
   const n = parseInt(document.getElementById('rng-prof-n')?.value||30);
-  const sorted = [...(YD.stage_stats||[])].filter(d => d.profile_score>0)
+  const active = getPills('prof-level-pills');
+  const sorted = [...(YD.stage_stats||[])]
+    .filter(d => d.profile_score > 0 && matchRaceLevel(d.race_class, active))
     .sort((a,b) => (b.profile_score||0)-(a.profile_score||0)).slice(0,n)
     .map(d => ({...d, _lbl:stageLabel(d)}));
   const traces = _raceBarTraces(sorted, 'profile_score', d=>[d.vertical_meters||0, d.distance_km||0]);
@@ -1646,7 +1708,9 @@ function renderRaceProfile() {
 
 function renderRaceVert() {
   const n = parseInt(document.getElementById('rng-vert-n')?.value||30);
-  const sorted = [...(YD.stage_stats||[])].filter(d => d.vertical_meters>0)
+  const active = getPills('vert-level-pills');
+  const sorted = [...(YD.stage_stats||[])]
+    .filter(d => d.vertical_meters > 0 && matchRaceLevel(d.race_class, active))
     .sort((a,b) => (b.vertical_meters||0)-(a.vertical_meters||0)).slice(0,n)
     .map(d => ({...d, _lbl:stageLabel(d)}));
   const traces = _raceBarTraces(sorted, 'vertical_meters', d=>[d.profile_score||0, d.distance_km||0]);
@@ -1655,7 +1719,9 @@ function renderRaceVert() {
 
 function renderRaceDist() {
   const n = parseInt(document.getElementById('rng-dist-n')?.value||30);
-  const sorted = [...(YD.stage_stats||[])].filter(d => d.distance_km>0)
+  const active = getPills('dist-level-pills');
+  const sorted = [...(YD.stage_stats||[])]
+    .filter(d => d.distance_km > 0 && matchRaceLevel(d.race_class, active))
     .sort((a,b) => (b.distance_km||0)-(a.distance_km||0)).slice(0,n)
     .map(d => ({...d, _lbl:stageLabel(d)}));
   const traces = _raceBarTraces(sorted, 'distance_km', d=>[d.vertical_meters||0, d.profile_score||0]);
